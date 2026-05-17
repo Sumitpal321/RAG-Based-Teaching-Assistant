@@ -1,0 +1,46 @@
+# Web Framework
+fastapi
+uvicorn[standard]
+python-multipart
+
+# LangChain & RAG
+langchain
+langchain-community
+langchain-core
+langchain-groq
+
+# Vector Database
+pinecone
+
+# Embeddings (Google / Gemini)
+langchain-google-genai
+
+# PDF Processing
+pypdf
+
+# Environment Variables
+python-dotenv
+
+# Data Validation
+pydantic
+
+# HTTP Requests
+requests
+
+# Progress (optional)
+tqdm
+
+# Authentication / Security
+bcrypt
+
+# Supabase (REPLACES MongoDB)
+supabase
+
+# Optional UI (if using Streamlit)
+streamlit
+
+
+
+
+
+#  uv pip install -r requirements.txt
