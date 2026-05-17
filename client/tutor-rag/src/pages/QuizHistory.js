@@ -14,7 +14,7 @@ export default function QuizHistory() {
       .then(res => setHistory(res.data.history || []))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  }, [getAuthHeader]);
 
   const avgScore = history.length
     ? (history.reduce((sum, h) => sum + (h.score / h.total_questions) * 100, 0) / history.length).toFixed(1)
