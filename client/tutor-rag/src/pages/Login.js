@@ -16,14 +16,16 @@ export default function Login() {
     setLoading(true);
     try {
       const res = await loginApi(username, password);
-      const userData = {
-        username: username,
-        role: res.data.role || (res.data.message?.includes('teacher') ? 'teacher' : 'student'),
-        grade: res.data.grade
-      };
+      // Parse the message string to extract user data
+      const messageStr = res.data.message;
+      const role = messageStr.includes("'role': 'teacher'") ? 'teacher' : 'student';
+      const gradeMatch = messageStr.match(/'grade': '([^']+)'/);
+      const grade = gradeMatch ? gradeMatch[1] : '12';
+    
+      const userData = { username, role, grade };
       login(userData, { username, password });
       toast.success(`Welcome back, ${username}! 🎉`);
-      if (userData.role === 'teacher') navigate('/upload');
+      if (role === 'teacher') navigate('/upload');
       else navigate('/chat');
     } catch (err) {
       toast.error('Invalid username or password');
