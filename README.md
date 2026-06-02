@@ -12,8 +12,7 @@
 
 ## 🎥 Live Demo
 
-🔗 **Live App:** [https://rag-based-teaching-assistant-alltqxd17-sumit-dev198.vercel.app](https//:rag-based-teaching-assistant-qfzp.vercel.app
-)
+🔗 **Live App:** [https://rag-based-teaching-assistant-alltqxd17-sumit-dev198.vercel.app](https//:rag-based-teaching-assistant-qfzp-git-main-sumit-dev198.vercel.app)
 
 > 📹 **Video Demo:** *(Add your screen recording link here — Loom, YouTube, etc.)*
 
