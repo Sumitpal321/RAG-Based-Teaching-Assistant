@@ -13,25 +13,40 @@ from config.db import chunk_collection
 
 load_dotenv()
 
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 GOOGLE_EMBEDDING_MODEL = "models/gemini-embedding-001"
 GOOGLE_EMBEDDING_DIMENSION = 3072
 
-PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_ENV = os.getenv("PINECONE_ENV", "us-east-1")
 PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "tutor-rag")
-
-if not GOOGLE_API_KEY:
-    raise ValueError("GOOGLE_API_KEY missing")
-if not PINECONE_API_KEY:
-    raise ValueError("PINECONE_API_KEY missing")
-
-os.environ["GOOGLE_API_KEY"] = GOOGLE_API_KEY
 
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
-pc = Pinecone(api_key=PINECONE_API_KEY)
+# Lazy Pinecone client — created on first use so import never blocks startup
+_pc = None
+
+def _get_pc() -> Pinecone:
+    global _pc
+    if _pc is None:
+        api_key = os.getenv("PINECONE_API_KEY")
+        if not api_key:
+            raise RuntimeError(
+                "PINECONE_API_KEY is not set. "
+                "Add it to your Render environment variables."
+            )
+        _pc = Pinecone(api_key=api_key)
+    return _pc
+
+
+def _require_google_key() -> str:
+    key = os.getenv("GOOGLE_API_KEY")
+    if not key:
+        raise RuntimeError(
+            "GOOGLE_API_KEY is not set. "
+            "Add it to your Render environment variables."
+        )
+    os.environ["GOOGLE_API_KEY"] = key
+    return key
 
 
 def get_index_dimension(index_info):
@@ -44,11 +59,12 @@ def get_index_dimension(index_info):
 
 
 def wait_for_pinecone_index():
+    pc = _get_pc()
     while PINECONE_INDEX_NAME not in [i["name"] for i in pc.list_indexes()]:
         time.sleep(1)
 
     while True:
-        index_info = pc.describe_index(PINECONE_INDEX_NAME)
+        index_info = _get_pc().describe_index(PINECONE_INDEX_NAME)
         index_data = index_info.to_dict() if hasattr(index_info, "to_dict") else index_info
         status = index_data.get("status", {}) if isinstance(index_data, dict) else getattr(index_info, "status", {})
         ready = status.get("ready") if isinstance(status, dict) else getattr(status, "ready", True)
@@ -60,7 +76,7 @@ def wait_for_pinecone_index():
 
 
 def create_pinecone_index():
-    pc.create_index(
+    _get_pc().create_index(
         name=PINECONE_INDEX_NAME,
         dimension=GOOGLE_EMBEDDING_DIMENSION,
         metric="cosine",
@@ -73,6 +89,7 @@ def create_pinecone_index():
 
 
 def get_pinecone_index():
+    pc = _get_pc()
     existing = [i["name"] for i in pc.list_indexes()]
 
     if PINECONE_INDEX_NAME not in existing:
@@ -97,6 +114,7 @@ def get_pinecone_index():
 
 
 async def load_vectorstore(uploaded_files, role, doc_id, grade):
+    _require_google_key()
 
     embed_model = GoogleGenerativeAIEmbeddings(
         model=GOOGLE_EMBEDDING_MODEL,

@@ -4,22 +4,12 @@ from dotenv import load_dotenv
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_groq import ChatGroq
-from torch import embedding
 from config.db import chunk_collection
 from docs.vectorstore import get_pinecone_index, GOOGLE_EMBEDDING_MODEL
 
 # Load environment variables
 load_dotenv()
 
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-
-os.environ["GOOGLE_API_KEY"] = GOOGLE_API_KEY
-
-#Define our embedding model
-embed_model = GoogleGenerativeAIEmbeddings(model=GOOGLE_EMBEDDING_MODEL)
-#define llm model
-llm = ChatGroq(temperature=0.3,model="llama-3.3-70b-versatile", groq_api_key=GROQ_API_KEY)
 #Define chat prompt template
 rag_prompt = ChatPromptTemplate.from_template(
     """
@@ -65,11 +55,50 @@ Context:
     """
 )
 
-#Design the rag chain
-rag_chain = rag_prompt | llm
-quiz_chain = quiz_prompt | llm
+# ---------------------------------------------------------------------------
+# Lazy client getters — clients are created on first request, NOT at import
+# time. This prevents crashes during Python's import phase on Render.
+# ---------------------------------------------------------------------------
+_embed_model = None
+_llm = None
 
-async def answer_query(query:str, user_role:str, user_grade:int)->dict:
+
+def _get_embed_model() -> GoogleGenerativeAIEmbeddings:
+    global _embed_model
+    if _embed_model is None:
+        api_key = os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            raise RuntimeError(
+                "GOOGLE_API_KEY is not set. "
+                "Add it to your Render environment variables."
+            )
+        os.environ["GOOGLE_API_KEY"] = api_key
+        _embed_model = GoogleGenerativeAIEmbeddings(model=GOOGLE_EMBEDDING_MODEL)
+    return _embed_model
+
+
+def _get_llm() -> ChatGroq:
+    global _llm
+    if _llm is None:
+        groq_api_key = os.getenv("GROQ_API_KEY")
+        if not groq_api_key:
+            raise RuntimeError(
+                "GROQ_API_KEY is not set. "
+                "Add it to your Render environment variables."
+            )
+        _llm = ChatGroq(
+            temperature=0.3,
+            model="llama-3.3-70b-versatile",
+            groq_api_key=groq_api_key
+        )
+    return _llm
+
+
+async def answer_query(query: str, user_role: str, user_grade: int) -> dict:
+    embed_model = _get_embed_model()
+    llm = _get_llm()
+    rag_chain = rag_prompt | llm
+
     #1 Embedding generation
     query_embedding = await asyncio.to_thread(embed_model.embed_query, query)
     print(f"Query embedding dimension: {len(query_embedding)}")
@@ -118,7 +147,7 @@ async def answer_query(query:str, user_role:str, user_grade:int)->dict:
         {"question": query, "context": context}
     )
 
-    #5 Reatirn response and sources
+    #5 Return response and sources
     answer_text = (
         response.content
         if hasattr(response, "content")
@@ -130,10 +159,14 @@ async def answer_query(query:str, user_role:str, user_grade:int)->dict:
     )
 
 
-async def quiz_generator(topic:str, user_role:str, user_grade:int, num_questions:int=3)->dict:
+async def quiz_generator(topic: str, user_role: str, user_grade: int, num_questions: int = 3) -> dict:
+    embed_model = _get_embed_model()
+    llm = _get_llm()
+    quiz_chain = quiz_prompt | llm
+
     #1 Embedding generation
-    embedding = await asyncio.to_thread(embed_model.embed_query, topic)
-    print(f"Query embedding dimension: {len(embedding)}")
+    topic_embedding = await asyncio.to_thread(embed_model.embed_query, topic)
+    print(f"Query embedding dimension: {len(topic_embedding)}")
     index = get_pinecone_index()
 
     # DEBUG - add these lines
@@ -143,7 +176,7 @@ async def quiz_generator(topic:str, user_role:str, user_grade:int, num_questions
     #2 retrieve relevant embedding from vector database
     results = await asyncio.to_thread(
         index.query,
-        vector=embedding,
+        vector=topic_embedding,
         top_k=5,
         include_metadata=True,
         filter={"grade": int(user_grade), "role": {"$in": ["Public", user_role]}}
@@ -179,7 +212,7 @@ async def quiz_generator(topic:str, user_role:str, user_grade:int, num_questions
         {"num_questions": num_questions, "grade": user_grade, "context": context}
     )
 
-    #5 Reatirn response and sources
+    #5 Return response and sources
     quiz_text = (
         response.content
         if hasattr(response, "content")
@@ -187,8 +220,6 @@ async def quiz_generator(topic:str, user_role:str, user_grade:int, num_questions
     )
 
     return (
-        {"quiz": quiz_text, 
+        {"quiz": quiz_text,
          "sources": sources}
     )
-
-
