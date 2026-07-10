@@ -10,7 +10,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
-        "https://rag-based-teaching-assistant-qfzp.vercel.app",
+        "https://rag-based-teaching-assistant-qfzp-sumit-dev198.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
